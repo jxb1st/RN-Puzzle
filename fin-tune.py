@@ -26,13 +26,12 @@ from models import InpaintingModel
 
 from tensorboardX import SummaryWriter
 
-
 # Training settings
 parser = argparse.ArgumentParser(description='Region Normalization for Image Inpainting')
 parser.add_argument('--bs', type=int, default=14, help='training batch size')
 parser.add_argument('--input_size', type=int, default=256, help='input image size')
 parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
-parser.add_argument('--nEpochs', type=int, default=20, help='number of epochs to train for')
+parser.add_argument('--nEpochs', type=int, default=10, help='number of epochs to train for')
 parser.add_argument('--snapshots', type=int, default=1, help='Snapshots')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning Rate. Default=0.0001')
 parser.add_argument('--gpu_mode', type=bool, default=True)
@@ -43,36 +42,30 @@ parser.add_argument('--img_flist', type=str, default='shuffled_train.flist')
 parser.add_argument('--mask_flist', type=str, default='all.flist')
 parser.add_argument('--model_type', type=str, default='RN')
 parser.add_argument('--threshold', type=float, default=0.8)
-parser.add_argument('--pretrained_sr', default=r'C:\Users\11504\Desktop\RN-Puzzle\pretrained_model\x_admin.cluster.localRN-0.8RN-Net_bs_14_epoch_3.pth', help='pretrained base model')
+parser.add_argument('--pretrained_sr', default='../weights/xx.pth', help='pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
-parser.add_argument('--save_folder', default='./ckpt-vit/', help='Location to save checkpoint models')
+parser.add_argument('--save_folder', default='./ckpt/', help='Location to save checkpoint models')
 parser.add_argument('--prefix', default='0p1GAN0p8thre', help='Location to save checkpoint models')
 parser.add_argument('--print_interval', type=int, default=100, help='how many steps to print the results out')
-parser.add_argument('--render_interval', type=int, default=100, help='how many steps to save a checkpoint')
+parser.add_argument('--render_interval', type=int, default=10000, help='how many steps to save a checkpoint')
 parser.add_argument('--l1_weight', type=float, default=1.0)
 parser.add_argument('--gan_weight', type=float, default=0.1)
 parser.add_argument('--update_weight_interval', type=int, default=5000, help='how many steps to update losses weighing')
-parser.add_argument('--with_test', default=True, action='store_true', help='Train with testing?')
+parser.add_argument('--with_test', default=False, action='store_true', help='Train with testing?')
 parser.add_argument('--test', default=False, action='store_true', help='Test model')
-parser.add_argument('--test_mask_flist', type=str, default=r'C:\Users\11504\Desktop\RN-Puzzle\dataset\coco-val-256-mask.flist')
-parser.add_argument('--test_img_flist', type=str, default=r'C:\Users\11504\Desktop\RN-Puzzle\dataset\coco-val-256.flist')
-parser.add_argument('--tb', default=True, action='store_true', help='Use tensorboardX?')
+parser.add_argument('--test_mask_flist', type=str, default='mask1k.flist')
+parser.add_argument('--test_img_flist', type=str, default='val1k.flist')
+parser.add_argument('--tb', default=False, action='store_true', help='Use tensorboardX?')
 
 opt = parser.parse_args()
 gpus_list = list(range(opt.gpus))  # the list of gpu
 hostname = str(socket.gethostname())
-#获取当前运行脚本的主机名并将其转换为字符串格式。主机名可以用于日志记录或生成独特的文件名。
 opt.save_folder += opt.prefix
-# 启用cudnn的benchmark模式。这可以提升卷积操作的性能，尤其在输入大小固定的情况下
 cudnn.benchmark = True
 if not os.path.exists(opt.save_folder):
     os.makedirs(opt.save_folder)
 print(opt)
 
-# Ensure writer is defined
-# writer = None
-# if opt.tb:
-#     writer = SummaryWriter()
 
 def train(epoch):
     iteration, avg_g_loss, avg_d_loss, avg_l1_loss, avg_gan_loss = 0, 0, 0, 0, 0
@@ -81,7 +74,7 @@ def train(epoch):
     t0 = time.time()
     t_io1 = time.time()
     for batch in tqdm(training_data_loader, desc=f"Epoch {epoch}", unit="batch"):
-    # for batch in training_data_loader:(todo)
+        # for batch in training_data_loader:
         gt, mask, index = batch
         t_io2 = time.time()
         if cuda:
@@ -89,7 +82,7 @@ def train(epoch):
             mask = mask.cuda()
 
         prediction = model.generator(gt, mask)
-        merged_result = prediction * mask + gt * (1 - mask) # 将生成的prediction图片和mask合并起来
+        merged_result = prediction * mask + gt * (1 - mask)
         # render(epoch, iteration, mask, prediction.detach(), gt)
         # os._exit()
 
@@ -128,24 +121,25 @@ def train(epoch):
         avg_d_loss += d_loss.data.item()
 
         model.global_iter += 1
-        # print("iteration: ", iteration)
         iteration += 1
         t1 = time.time()
         td, t0 = t1 - t0, t1
 
         if iteration % opt.print_interval == 0:
-            # avg_l1_loss：衡量生成图像与真实图像之间的 L1 差异，鼓励生成器生成与真实图像更接近的结果。
-            # avg_gan_loss： 衡量生成器在欺骗判别器方面的表现，生成器希望最大化该损失以欺骗判别器。
-            print("=> Epoch[{}]({}/{}): Avg L1 loss: {:.6f} | G loss: {:.6f} | Avg D loss: {:.6f} || Timer: {:.4f} sec. | IO: {:.4f}".format(
-                epoch, iteration, len(training_data_loader), avg_l1_loss/opt.print_interval, avg_g_loss/opt.print_interval, avg_d_loss/opt.print_interval, td, t_io2-t_io1), flush=True)
-            #print("=> Epoch[{}]({}/{}): Avg G loss: {:.6f} || Timer: {:.4f} sec. || IO: {:.4f}".format(
+            print(
+                "=> Epoch[{}]({}/{}): Avg L1 loss: {:.6f} | G loss: {:.6f} | Avg D loss: {:.6f} || Timer: {:.4f} sec. | IO: {:.4f}".format(
+                    epoch, iteration, len(training_data_loader), avg_l1_loss / opt.print_interval,
+                                                                 avg_g_loss / opt.print_interval,
+                                                                 avg_d_loss / opt.print_interval, td, t_io2 - t_io1),
+                flush=True)
+            # print("=> Epoch[{}]({}/{}): Avg G loss: {:.6f} || Timer: {:.4f} sec. || IO: {:.4f}".format(
             #    epoch, iteration, len(training_data_loader), avg_g_loss/opt.print_interval, td, t_io2-t_io1), flush=True)
 
             if opt.tb:
-                writer.add_scalar('scalar/G_loss', avg_g_loss/opt.print_interval, model.global_iter)
-                writer.add_scalar('scalar/D_loss', avg_d_loss/opt.print_interval, model.global_iter)
-                writer.add_scalar('scalar/G_l1_loss', avg_l1_loss/opt.print_interval, model.global_iter)
-                writer.add_scalar('scalar/G_gan_loss', avg_gan_loss/opt.print_interval, model.global_iter)
+                writer.add_scalar('scalar/G_loss', avg_g_loss / opt.print_interval, model.global_iter)
+                writer.add_scalar('scalar/D_loss', avg_d_loss / opt.print_interval, model.global_iter)
+                writer.add_scalar('scalar/G_l1_loss', avg_l1_loss / opt.print_interval, model.global_iter)
+                writer.add_scalar('scalar/G_gan_loss', avg_gan_loss / opt.print_interval, model.global_iter)
 
             avg_g_loss, avg_d_loss, avg_l1_loss, avg_gan_loss = 0, 0, 0, 0
         t_io1 = time.time()
@@ -153,44 +147,42 @@ def train(epoch):
         if iteration % opt.render_interval == 0:
             render(epoch, iteration, mask, merged_result.detach(), gt)
             if opt.with_test:
-                test_num = 500 # 只取test_data_loader中的前500个做test，不够的话可以在下面改成all
+                test_num = 500
                 print("Testing {} images...".format(test_num))
-                test_psnr = test(model, test_data_loader, test_num=test_num)    # or 'all'
+                test_psnr = test(model, test_data_loader, test_num=test_num)  # or 'all'
                 print("PSNR: ", test_psnr)
                 if opt.tb:
                     writer.add_scalar('scalar/test_PSNR', test_psnr, model.global_iter)
-        #每10000个batch结束保存一下模型（或者在main中写了每1个epoch保存一下模型）
-        if iteration % 10000 == 0:
+
+        if iteration % 50000 == 0:
             checkpoint(iteration)
 
-# 在训练过程中保存输入图像、掩码、模型输出和真实图像的可视化结果
+
 def render(epoch, iter, mask, output, gt):
-    diry = 'render/'+opt.prefix
+    diry = 'render/' + opt.prefix
     if not os.path.exists(diry):
         os.makedirs(diry)
 
-    name_pre = diry+'/'+str(epoch)+'_'+str(iter)+'_'
+    name_pre = diry + '/' + str(epoch) + '_' + str(iter) + '_'
 
     # input: (bs,3,256,256)
-    # 将gt与mask合并
     input = gt * (1 - mask) + mask
-    # 取batch中的第一个，将通道维度移到最后，并转换为 NumPy 数组。
-    input = input[0].permute(1,2,0).cpu().numpy()
-    io.imsave(name_pre+'input.png', (input*255).astype(np.uint8))
+    input = input[0].permute(1, 2, 0).cpu().numpy()
+    io.imsave(name_pre + 'input.png', (input * 255).astype(np.uint8))
 
     # mask: (bs,1,256,256)
-    mask = mask[0,0].cpu().numpy()
-    io.imsave(name_pre+'mask.png', (mask*255).astype(np.uint8))
+    mask = mask[0, 0].cpu().numpy()
+    io.imsave(name_pre + 'mask.png', (mask * 255).astype(np.uint8))
 
     # output: (bs,3,256,256)
-    output = output[0].permute(1,2,0).cpu().numpy()
-    io.imsave(name_pre+'output.png', (output*255).astype(np.uint8))
+    output = output[0].permute(1, 2, 0).cpu().numpy()
+    io.imsave(name_pre + 'output.png', (output * 255).astype(np.uint8))
 
     # gt: (bs,3,256,256)
-    gt = gt[0].permute(1,2,0).cpu().numpy()
-    io.imsave(name_pre+'gt.png', (gt*255).astype(np.uint8))
+    gt = gt[0].permute(1, 2, 0).cpu().numpy()
+    io.imsave(name_pre + 'gt.png', (gt * 255).astype(np.uint8))
 
-# 测试阶段评估生成器模型的性能，具体是通过计算测试图像与生成图像之间的 PSNR（峰值信噪比）值。
+
 def test(gen, dataloader, test_num='all'):
     model = gen.eval()
     psnr = 0
@@ -204,8 +196,8 @@ def test(gen, dataloader, test_num='all'):
             pred_batch = model.generator(gt_batch, mask_batch)
         for i in range(gt_batch.size(0)):
             gt, pred = gt_batch[i], pred_batch[i]
-            psnr += compare_psnr(pred.permute(1,2,0).cpu().numpy(), gt.permute(1,2,0).cpu().numpy(),\
-            data_range=1)
+            psnr += compare_psnr(pred.permute(1, 2, 0).cpu().numpy(), gt.permute(1, 2, 0).cpu().numpy(), \
+                                 data_range=1)
             count += 1
         if test_num == 'all':
             pass
@@ -214,11 +206,13 @@ def test(gen, dataloader, test_num='all'):
 
     return psnr / count
 
+
 def checkpoint(epoch):
-    model_out_path = opt.save_folder+'/'+'x_'+hostname + \
-        opt.model_type+"_"+opt.prefix + "_bs_{}_epoch_{}.pth".format(opt.bs, epoch)
+    model_out_path = opt.save_folder + '/' + 'x_' + hostname + \
+                     opt.model_type + "_" + opt.prefix + "_bs_{}_epoch_{}.pth".format(opt.bs, epoch)
     torch.save(model.state_dict(), model_out_path)
     print("Checkpoint saved to {}".format(model_out_path))
+
 
 if __name__ == '__main__':
     if opt.tb:
@@ -235,17 +229,16 @@ if __name__ == '__main__':
         torch.cuda.manual_seed_all(opt.seed)
 
     # Model
-    model = InpaintingModel(g_lr=opt.lr, d_lr=(0.1 * opt.lr), l1_weight=opt.l1_weight, gan_weight=opt.gan_weight, iter=0, threshold=opt.threshold)
+    model = InpaintingModel(g_lr=opt.lr, d_lr=(0.1 * opt.lr), l1_weight=opt.l1_weight, gan_weight=opt.gan_weight,
+                            iter=0, threshold=opt.threshold)
     print('---------- Networks architecture -------------')
     print("Generator:")
     print_network(model.generator)
     print("Discriminator:")
     print_network(model.discriminator)
     print('----------------------------------------------')
-    # 初始化神经网络的权重和偏置 (todo)
     initialize_weights(model, scale=0.1)
 
-    # 将模型迁移到 GPU 上，并在有多个 GPU 可用时使用数据并行
     if cuda:
         model = model.cuda()
         # if opt.gpus > 1: original
@@ -254,19 +247,16 @@ if __name__ == '__main__':
             model.discriminator = torch.nn.DataParallel(model.discriminator, device_ids=gpus_list)
 
     # Load the pretrain model.
-    # 加载预训练模型，并将其权重应用到当前模型中
     if opt.pretrained:
         model_name = os.path.join(opt.pretrained_sr)
         print('pretrained model: %s' % model_name)
         if os.path.exists(model_name):
-            # map_location=lambda storage, loc: storage 这个参数确保模型被加载到 CPU 上，之后可以根据需要将其移动到 GPU。
             pretained_model = torch.load(model_name, map_location=lambda storage, loc: storage)
-            # 将预训练的权重加载到当前模型中。
-            model.load_state_dict(pretained_model, strict=False)   # strict=Fasle since I modify discirminator in the previous commit
+            model.load_state_dict(pretained_model,
+                                  strict=False)  # strict=Fasle since I modify discirminator in the previous commit
             print('Pre-trained model is loaded.')
-            # 打印当前生成器的学习率（G learning rate）、L1损失权重（L1 loss weight）和GAN损失权重（GAN loss weight）
             print(' Current: G learning rate:', model.g_lr, ' | L1 loss weight:', model.l1_weight, \
-            ' | GAN loss weight:', model.gan_weight)
+                  ' | GAN loss weight:', model.gan_weight)
 
     # Datasets
     print('===> Loading datasets...')
@@ -309,14 +299,14 @@ if __name__ == '__main__':
     # Start training
     if not os.path.exists('render'):
         os.makedirs('render')
-    
+
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
 
         print(f"Epoch {epoch} starting...")
         train(epoch)
         print(f"Epoch {epoch} finished")
 
-        count = (epoch-1)
+        count = (epoch - 1)
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
         for param_group in model.gen_optimizer.param_groups:
@@ -326,7 +316,7 @@ if __name__ == '__main__':
             param_group['lr'] = model.d_lr * (0.8 ** count)
             print('===> Current D learning rate: ', param_group['lr'])
 
-        if (epoch+1) % (opt.snapshots) == 0:
+        if (epoch + 1) % (opt.snapshots) == 0:
             checkpoint(epoch)
-        if opt.tb:
-            writer.close()
+if opt.tb:
+    writer.close()

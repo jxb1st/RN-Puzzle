@@ -45,8 +45,8 @@ parser.add_argument('--threshold', type=float, default=0.8)
 parser.add_argument('--img_flist', type=str, default='/data/dataset/places2/flist/val.flist')
 parser.add_argument('--mask_flist', type=str, default='/data/dataset/places2/flist/3w_all.flist')
 parser.add_argument('--model', default='/data/yutao/Project/weights/BGNet/x_admin.cluster.localRN-0.8BGNet_bs_14_epoch_9.pth', help='sr pretrained base model')
-parser.add_argument('--save', default=False, action='store_true', help='If save test images')
-parser.add_argument('--save_path', type=str, default='./test_results')
+parser.add_argument('--save', default=True, action='store_true', help='If save test images')
+parser.add_argument('--save_path', type=str, default='./test_one_image')
 parser.add_argument('--input_size', type=int, default=256, help='input image size')
 parser.add_argument('--l1_weight', type=float, default=1.0)
 parser.add_argument('--gan_weight', type=float, default=0.1)
@@ -135,9 +135,9 @@ def PSNR(pred, gt, shave_border=0):
 def L1(pred, gt):
     return np.mean(np.abs((np.mean(pred,2) - np.mean(gt,2))/255))
 
-def SSIM(pred, gt, data_range=255, win_size=11, multichannel=True):
+def SSIM(pred, gt, data_range=255, win_size=11, multichannel=False, full=True):
     return compare_ssim(pred, gt, data_range=data_range, \
-    multichannel=multichannel, win_size=win_size)
+    multichannel=multichannel, win_size=win_size, channel_axis=2)
 
 def evaluate_batch(batch_size, gt_batch, pred_batch, mask_batch, save=False, path=None, count=None, index=None):
     pred_batch = pred_batch * mask_batch + gt_batch * (1 - mask_batch)
@@ -160,7 +160,7 @@ def evaluate_batch(batch_size, gt_batch, pred_batch, mask_batch, save=False, pat
 
         psnr += PSNR(pred, gt)
         ssim += SSIM(pred, gt)
-        # ssim += SSIM(pred, gt, multichannel=False)
+        # ssim += SSIM(pred, gt, multichannel=True)
         l1 += L1(pred, gt)
 
         if save:

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 class RN_binarylabel(nn.Module):
     def __init__(self, feature_channels):
         super(RN_binarylabel, self).__init__()
+        #定义了一个批量归一化层 bn_norm，不使用偏差参数和运行时统计信息
         self.bn_norm = nn.BatchNorm2d(feature_channels, affine=False, track_running_stats=False)
 
     def forward(self, x, label):

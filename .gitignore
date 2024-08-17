@@ -1,0 +1,15 @@
+ckpt/
+ckpt-fintune/
+dataset/
+destoryed-image/
+destoryed-image-png/
+pretrained_model/
+render/
+runs/
+test_fintune_coco_val_irregular/
+test_fintune_coco_val_regular/
+test_fintune_place_val_irregular/
+test_pretrained_coco_val_irregular/
+test_pretrained_coco_val_regular02/
+test_pretrained_place2_val_irregular/
+test_pretrained_place2_val_regular/
